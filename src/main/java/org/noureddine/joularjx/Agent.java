@@ -67,11 +67,6 @@ public class Agent {
     private double totalProcessEnergy;
 
     /**
-     * Size of list containing methods to filter for energy
-     */
-    private int sizeFilterMethodNames;
-
-    /**
      * Sensor to use for monitor CPU energy/power consumption
      */
     private String energySensor;
@@ -100,31 +95,9 @@ public class Agent {
         this.filterMethodNames = new ArrayList<>();
         this.methodsEnergyFiltered = new HashMap<>();
         this.totalProcessEnergy = 0;
-        this.sizeFilterMethodNames = 0;
         this.energySensor = "";
         this.powerMonitorPathWindows = "";
         this.powerMonitorWindowsProcess = null;
-    }
-
-    /**
-     * Check if methodName starts with one of the filtered method names
-     * @param methodName Name of method
-     * @return True if methodName starts with one of the filtered method names, false if not
-     */
-    private boolean isStartsFilterMethodNames(String methodName) {
-        // In most cases, there will be one filtered method name
-        // So we check that to gain performance and avoid looping the list
-        if (sizeFilterMethodNames == 1) {
-            return methodName.startsWith(filterMethodNames.get(0));
-        } else {
-            // Check for every filtered method name if methodName start with any of them
-            for (String filterMethod : filterMethodNames) {
-                if (methodName.startsWith(filterMethod)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**
@@ -217,7 +190,6 @@ public class Agent {
 
         // Get filtered methods
         this.filterMethodNames = Arrays.asList(prop.getProperty("filter-method-names").split(","));
-        this.sizeFilterMethodNames = filterMethodNames.size();
         this.powerMonitorPathWindows = prop.getProperty("powermonitor-path");
 
         // Get OS MxBean to collect CPU and Process loads
@@ -309,7 +281,7 @@ public class Agent {
                                         onlyFirst++;
 
                                         // Check filtered methods if in stacktrace
-                                        if (isStartsFilterMethodNames(methName)) {
+                                        if (isFilteredMethod(methName)) {
                                             if (onlyFirstFiltered == 0) {
                                                 synchronized (LOCK) {
                                                     Map<String, Integer> methData = methodsStatsFiltered.get(threadID);
@@ -560,5 +532,19 @@ public class Agent {
 
     private double readJoulesFromFile(Path path) throws IOException {
         return Double.parseDouble(Files.readString(path)) / MICROJOULES_IN_JOULES;
+    }
+
+    /**
+     * Check if methodName starts with one of the filtered method names
+     * @param methodName Name of method
+     * @return True if methodName starts with one of the filtered method names, false if not
+     */
+    private boolean isFilteredMethod(String methodName) {
+        for (String filterMethod : filterMethodNames) {
+            if (methodName.startsWith(filterMethod)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
