@@ -100,17 +100,6 @@ public class Agent {
         this.powerMonitorWindowsProcess = null;
     }
 
-    /**
-     * Calculate process energy consumption
-     * @param totalCPUUsage Total CPU usage
-     * @param processCPUUSage Process CPU usage
-     * @param CPUEnergy CPU energy
-     * @return Process energy consumption
-     */
-    private double calculateProcessCPUEnergy(Double totalCPUUsage, Double processCPUUSage, Double CPUEnergy) {
-        return (processCPUUSage * CPUEnergy) / totalCPUUsage;
-    }
-
     public void run() {
         Thread.currentThread().setName("JalenX Agent Thread");
         System.out.println("+---------------------------------+");
@@ -532,6 +521,17 @@ public class Agent {
 
     private double readJoulesFromFile(Path path) throws IOException {
         return Double.parseDouble(Files.readString(path)) / MICROJOULES_IN_JOULES;
+    }
+
+    /**
+     * Calculate process energy consumption
+     * @param totalCPUUsage Total CPU usage
+     * @param processCPUUSage Process CPU usage
+     * @param CPUEnergy CPU energy
+     * @return Process energy consumption
+     */
+    private double calculateProcessCPUEnergy(double totalCPUUsage, double processCPUUSage, double CPUEnergy) {
+        return (processCPUUSage * CPUEnergy) / totalCPUUsage;
     }
 
     /**
