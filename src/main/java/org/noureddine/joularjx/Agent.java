@@ -41,6 +41,11 @@ public class Agent {
      */
     private static final Object LOCK = new Object();
 
+    private static final Path PSYS = Path.of("/sys/class/powercap/intel-rapl/intel-rapl:1/energy_uj");
+    private static final Path PKG = Path.of("/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj");
+    private static final Path DRAM = Path.of("/sys/class/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:2/energy_uj");
+    private static final double MICROJOULES_IN_JOULES = 1000000;
+
     /**
      * Map to store total energy for each method
      */
@@ -120,61 +125,6 @@ public class Agent {
             }
         }
         return false;
-    }
-
-    /**
-     * Get energy readings from RAPL through powercap
-     * Calculates the best energy reading as supported by CPU (psys, or pkg+dram, or pkg)
-     * @return Energy readings from RAPL
-     */
-    private Double getRAPLEnergy() {
-        String psys = "/sys/class/powercap/intel-rapl/intel-rapl:1/energy_uj";
-        String pkg = "/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj";
-        String dram = "/sys/class/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:2/energy_uj";
-        Double energyData = 0.0;
-
-        try {
-            File psysFile = new File(psys);
-            if (psysFile.exists()) {
-                // psys exists, so use this for energy readings
-                Path psysPath = Path.of(psys);
-                try {
-                    energyData = Double.parseDouble(Files.readString(psysPath));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                // No psys supported, then check for pkg and dram
-                File pkgFile = new File(pkg);
-                if (pkgFile.exists()) {
-                    // pkg exists, check also for dram
-                    Path pkgPath = Path.of(pkg);
-                    try {
-                        energyData = Double.parseDouble(Files.readString(pkgPath));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-
-                    File dramFile = new File(dram);
-                    if (dramFile.exists()) {
-                        // dram and pkg exists, then get sum of both
-                        Path dramPath = Path.of(dram);
-                        try {
-                            energyData += Double.parseDouble(Files.readString(dramPath));
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("Failed to get RAPL energy readings. Did you run JoularJX with elevated privileges (sudo)?");
-            System.exit(1);
-        }
-
-        // Divide by 1 million to convert microJoules to Joules
-        energyData = energyData / 1000000;
-        return energyData;
     }
 
     /**
@@ -581,5 +531,34 @@ public class Agent {
             // We return 0 in this case and in case any error reading the file or PowerJoular not installed
             return 0;
         }
+    }
+
+    /**
+     * Get energy readings from RAPL through powercap
+     * Calculates the best energy reading as supported by CPU (psys, or pkg+dram, or pkg)
+     * @return Energy readings from RAPL
+     */
+    private double getRAPLEnergy() {
+        try {
+            if (Files.exists(PSYS)) {
+                return readJoulesFromFile(PSYS);
+            } else {
+                double energyData = readJoulesFromFile(PKG);
+                if (Files.exists(DRAM)) {
+                    energyData += readJoulesFromFile(DRAM);
+                }
+                return energyData;
+            }
+        } catch (IOException e) {
+            Util.sneakyThrows(e);
+        } catch (Exception e) {
+            System.out.println("Failed to get RAPL energy readings. Did you run JoularJX with elevated privileges (sudo)?");
+            System.exit(1);
+        }
+        return 0;
+    }
+
+    private double readJoulesFromFile(Path path) throws IOException {
+        return Double.parseDouble(Files.readString(path)) / MICROJOULES_IN_JOULES;
     }
 }
