@@ -11,75 +11,109 @@
 
 package org.noureddine.joularjx;
 
-import java.io.*;
+import com.sun.management.OperatingSystemMXBean;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
-import com.sun.management.OperatingSystemMXBean;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 public class Agent {
-    /**
-     * Private constructor
-     */
-    private Agent() {
-    }
 
     /**
-     * Variables to collect the program energy consumption
+     * Global monitor used to implement mutual-exclusion. In the future this single
+     * monitor may be broken up into many different monitors to reduce contention.
      */
-    private static double totalProcessEnergy = 0;
+    private static final Object LOCK = new Object();
 
     /**
      * Map to store total energy for each method
      */
-    private static Map<String, Double> methodsEnergy = new HashMap<>();
-
-    /**
-     * List of methods to filter for energy
-     */
-    private static List<String> filterMethodNames = new ArrayList<String>();
-
-    /**
-     * Size of list containing methods to filter for energy
-     */
-    private static int sizeFilterMethodNames = 0;
+    private final Map<String, Double> methodsEnergy;
 
     /**
      * Map to store total energy for filtered methods
      */
-    private static Map<String, Double> methodsEnergyFiltered = new HashMap<>();
+    private final Map<String, Double> methodsEnergyFiltered;
+
+    /**
+     * List of methods to filter for energy
+     */
+    private List<String> filterMethodNames;
+
+    /**
+     * Variables to collect the program energy consumption
+     */
+    private double totalProcessEnergy;
+
+    /**
+     * Size of list containing methods to filter for energy
+     */
+    private int sizeFilterMethodNames;
 
     /**
      * Sensor to use for monitor CPU energy/power consumption
      */
-    private static String energySensor = "";
+    private String energySensor;
 
     /**
      * Path for our power monitor program on Windows
      */
-    private static String powerMonitorPathWindows = "";
+    private String powerMonitorPathWindows;
 
     /**
      * Process to run power monitor on Windows
      */
-    private static Process powerMonitorWindowsProcess;
+    private Process powerMonitorWindowsProcess;
+
+    /**
+     * JVM hook to statically load the java agent at startup.
+     * After the Java Virtual Machine (JVM) has initialized, the premain method
+     * will be called. Then the real application main method will be called.
+     */
+    public static void premain(String args, Instrumentation inst) {
+        new Agent().run();
+    }
+
+    public Agent() {
+        this.methodsEnergy = new HashMap<>();
+        this.filterMethodNames = new ArrayList<>();
+        this.methodsEnergyFiltered = new HashMap<>();
+        this.totalProcessEnergy = 0;
+        this.sizeFilterMethodNames = 0;
+        this.energySensor = "";
+        this.powerMonitorPathWindows = "";
+        this.powerMonitorWindowsProcess = null;
+    }
 
     /**
      * Check if methodName starts with one of the filtered method names
      * @param methodName Name of method
      * @return True if methodName starts with one of the filtered method names, false if not
      */
-    private static boolean isStartsFilterMethodNames(String methodName) {
+    private boolean isStartsFilterMethodNames(String methodName) {
         // In most cases, there will be one filtered method name
         // So we check that to gain performance and avoid looping the list
-        if (Agent.sizeFilterMethodNames == 1) {
-            return methodName.startsWith(Agent.filterMethodNames.get(0));
+        if (sizeFilterMethodNames == 1) {
+            return methodName.startsWith(filterMethodNames.get(0));
         } else {
             // Check for every filtered method name if methodName start with any of them
-            for (String filterMethod : Agent.filterMethodNames) {
+            for (String filterMethod : filterMethodNames) {
                 if (methodName.startsWith(filterMethod)) {
                     return true;
                 }
@@ -93,7 +127,7 @@ public class Agent {
      * Calculates the best energy reading as supported by CPU (psys, or pkg+dram, or pkg)
      * @return Energy readings from RAPL
      */
-    private static Double getRAPLEnergy() {
+    private Double getRAPLEnergy() {
         String psys = "/sys/class/powercap/intel-rapl/intel-rapl:1/energy_uj";
         String pkg = "/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj";
         String dram = "/sys/class/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:2/energy_uj";
@@ -150,16 +184,11 @@ public class Agent {
      * @param CPUEnergy CPU energy
      * @return Process energy consumption
      */
-    private static double calculateProcessCPUEnergy(Double totalCPUUsage, Double processCPUUSage, Double CPUEnergy) {
+    private double calculateProcessCPUEnergy(Double totalCPUUsage, Double processCPUUSage, Double CPUEnergy) {
         return (processCPUUSage * CPUEnergy) / totalCPUUsage;
     }
 
-    /**
-     * JVM hook to statically load the java agent at startup.
-     * After the Java Virtual Machine (JVM) has initialized, the premain method
-     * will be called. Then the real application main method will be called.
-     */
-    public static void premain(String args, Instrumentation inst) {
+    public void run() {
         Thread.currentThread().setName("JalenX Agent Thread");
         System.out.println("+---------------------------------+");
         System.out.println("| JoularJX Agent Version 1.0      |");
@@ -196,7 +225,7 @@ public class Agent {
                     File raplFolder = new File(raplFolderPath);
                     if (raplFolder.exists()) {
                         // Rapl is supported
-                        Agent.energySensor = "rapl";
+                        this.energySensor = "rapl";
                     } else {
                         // If no RAPL, then no support
                         System.out.println("Platform not supported. Existing...");
@@ -211,7 +240,7 @@ public class Agent {
         } else if (osName.contains("win")) {
             // Windows
             // Check for Intel Power Gadget, and PowerJoular Windows
-            Agent.energySensor = "windows";
+            this.energySensor = "windows";
         } else {
             // Other platforms not supported
             System.out.println("Platform not supported. Existing...");
@@ -237,9 +266,9 @@ public class Agent {
         }
 
         // Get filtered methods
-        Agent.filterMethodNames = Arrays.asList(prop.getProperty("filter-method-names").split(","));
-        Agent.sizeFilterMethodNames = Agent.filterMethodNames.size();
-        Agent.powerMonitorPathWindows = prop.getProperty("powermonitor-path");
+        this.filterMethodNames = Arrays.asList(prop.getProperty("filter-method-names").split(","));
+        this.sizeFilterMethodNames = filterMethodNames.size();
+        this.powerMonitorPathWindows = prop.getProperty("powermonitor-path");
 
         // Get OS MxBean to collect CPU and Process loads
         OperatingSystemMXBean osMxBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
@@ -250,10 +279,10 @@ public class Agent {
         while (i < 2) {
             osMxBean.getCpuLoad();
             osMxBean.getProcessCpuLoad();
-            if (Agent.energySensor.equals("windows")) {
+            if (energySensor.equals("windows")) {
                 // On windows, start power monitoring a few seconds to initialize
                 try {
-                    Agent.powerMonitorWindowsProcess = Runtime.getRuntime().exec(Agent.powerMonitorPathWindows);
+                    this.powerMonitorWindowsProcess = Runtime.getRuntime().exec(powerMonitorPathWindows);
                 } catch (IOException ex) {
                     ex.printStackTrace();
                     System.out.println("Can't start power monitor on Windows. Existing...");
@@ -285,7 +314,7 @@ public class Agent {
                         Set<Thread> threads = Thread.getAllStackTraces().keySet();
 
                         double energyBefore = 0.0;
-                        switch (Agent.energySensor) {
+                        switch (energySensor) {
                             case "rapl":
                                 // Get CPU energy consumption with Intel RAPL
                                 energyBefore = getRAPLEnergy();
@@ -317,7 +346,7 @@ public class Agent {
                                     for (StackTraceElement ste : t.getStackTrace()) {
                                         String methName = ste.getClassName() + "." + ste.getMethodName();
                                         if (onlyFirst == 0) {
-                                            synchronized (GLOBALLOCK) {
+                                            synchronized (LOCK) {
                                                 Map<String, Integer> methData = methodsStats.get(threadID);
                                                 if (methData.containsKey(methName)) {
                                                     int methNumber = methData.get(methName) + 1;
@@ -330,9 +359,9 @@ public class Agent {
                                         onlyFirst++;
 
                                         // Check filtered methods if in stacktrace
-                                        if (Agent.isStartsFilterMethodNames(methName)) {
+                                        if (isStartsFilterMethodNames(methName)) {
                                             if (onlyFirstFiltered == 0) {
-                                                synchronized (GLOBALLOCK) {
+                                                synchronized (LOCK) {
                                                     Map<String, Integer> methData = methodsStatsFiltered.get(threadID);
                                                     if (methData.containsKey(methName)) {
                                                         int methNumber = methData.get(methName) + 1;
@@ -358,7 +387,7 @@ public class Agent {
                         double cpuLoad = osMxBean.getCpuLoad();
                         double processCpuLoad = osMxBean.getProcessCpuLoad();
 
-                        switch (Agent.energySensor) {
+                        switch (energySensor) {
                             case "rapl":
                                 // At the end of the monitoring loop
                                 energyAfter = getRAPLEnergy();
@@ -368,7 +397,7 @@ public class Agent {
                             case "windows":
                                 // Get CPU energy consumption on Windows using program monitor
                                 try {
-                                    BufferedReader input = new BufferedReader(new InputStreamReader(Agent.powerMonitorWindowsProcess.getInputStream()));
+                                    BufferedReader input = new BufferedReader(new InputStreamReader(powerMonitorWindowsProcess.getInputStream()));
                                     String line = input.readLine();
                                     CPUEnergy = Double.parseDouble(line);
                                 } catch (Exception ignoredException) {
@@ -380,7 +409,7 @@ public class Agent {
                         }
 
                         // Calculate CPU energy consumption of the process of the JVM all its apps
-                        double ProcessEnergy = Agent.calculateProcessCPUEnergy(cpuLoad, processCpuLoad, CPUEnergy);
+                        double ProcessEnergy = calculateProcessCPUEnergy(cpuLoad, processCpuLoad, CPUEnergy);
 
                         // Adds current power to total energy
                         totalProcessEnergy += ProcessEnergy;
@@ -481,7 +510,7 @@ public class Agent {
             public void run() {
                 // Kill power monitor on Windows process if ever used
                 try {
-                    Agent.powerMonitorWindowsProcess.destroy();
+                    powerMonitorWindowsProcess.destroy();
                 } catch (Exception ignoredException) {}
 
                 System.out.println("+---------------------------------+");
@@ -527,20 +556,11 @@ public class Agent {
     }
 
     /**
-     * Global monitor used to implement mutual-exclusion. In the future this single
-     * monitor may be broken up into many different monitors to reduce contention.
-     */
-    public static final Object GLOBALLOCK = new GlobalLock();
-
-    public static class GlobalLock {
-    }
-
-    /**
      * Read power data from PowerJoular CSV file
      * @param fileName Path and name of PowerJoular power CSV file
      * @return Power consumption as reported by PowerJoular for the CPU
      */
-    public static double getPowerFromCSVFile(String fileName) {
+    public double getPowerFromCSVFile(String fileName) {
         try {
             BufferedReader br = new BufferedReader(new FileReader(fileName));
             // Only read first line
