@@ -1,4 +1,4 @@
-package util;
+package org.noureddine.joularjx.util;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

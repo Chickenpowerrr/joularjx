@@ -1,4 +1,4 @@
-package util;
+package org.noureddine.joularjx.util;
 
 import java.util.concurrent.Callable;
 

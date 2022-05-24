@@ -5,7 +5,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
-import util.Sneaky;
+import org.noureddine.joularjx.util.Sneaky;
 
 public class WindowsEnergySensor implements EnergySensor {
 
