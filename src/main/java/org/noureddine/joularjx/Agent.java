@@ -11,10 +11,8 @@
 
 package org.noureddine.joularjx;
 
-import com.sun.management.OperatingSystemMXBean;
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
@@ -25,10 +23,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import org.noureddine.joularjx.energysensor.EnergySensor;
+import org.noureddine.joularjx.energysensor.EnergySensorFactory;
 
 public class Agent {
 
-    private static final Path RAPL_PATH = Path.of("/sys/class/powercap/intel-rapl/intel-rapl:0");
     private static final Path CONFIG_PATH = Path.of("./config.properties");
 
     /**
@@ -44,7 +43,7 @@ public class Agent {
     /**
      * Sensor to use for monitor CPU energy/power consumption
      */
-    private final String energySensor;
+    private final EnergySensor energySensor;
 
     /**
      * List of methods to filter for energy
@@ -52,19 +51,9 @@ public class Agent {
     private final List<String> filterMethodNames;
 
     /**
-     * Path for our power monitor program on Windows
-     */
-    private final String powerMonitorPathWindows;
-
-    /**
      * Variables to collect the program energy consumption
      */
     private final AtomicDouble totalProcessEnergy;
-
-    /**
-     * Process to run power monitor on Windows
-     */
-    private Process powerMonitorWindowsProcess;
 
     /**
      * JVM hook to statically load the java agent at startup.
@@ -87,9 +76,10 @@ public class Agent {
 
         Properties properties = getProperties();
 
-        this.energySensor = validateEnergySensor();
-        this.filterMethodNames = Arrays.asList(properties.getProperty("filter-method-names").split(","));
-        this.powerMonitorPathWindows = properties.getProperty("powermonitor-path");
+        this.energySensor = EnergySensorFactory.getInstance().getEnergySensor(
+            properties.getProperty("powermonitor-path"));
+        this.filterMethodNames = Arrays.asList(
+            properties.getProperty("filter-method-names").split(","));
     }
 
     private Properties getProperties() {
@@ -104,47 +94,15 @@ public class Agent {
 
         ThreadMXBean mxbean = enableCpuTime();
         long appPid = ProcessHandle.current().pid();
-        OperatingSystemMXBean osMxBean = getOSMXBean();
 
         System.out.println("Initialization finished");
 
         new Thread(
-            new PowerConsumptionHandler(appPid, energySensor, totalProcessEnergy, filterMethodNames,
-                methodsEnergy, methodsEnergyFiltered, mxbean, osMxBean,
-                powerMonitorWindowsProcess)).start();
+            new PowerConsumptionHandler(appPid, energySensor, mxbean, totalProcessEnergy,
+                filterMethodNames, methodsEnergy, methodsEnergyFiltered)).start();
         Runtime.getRuntime().addShutdownHook(new Thread(
-            new ShutdownHandler(appPid, totalProcessEnergy, powerMonitorWindowsProcess,
+            new ShutdownHandler(appPid, totalProcessEnergy, energySensor,
                 methodsEnergy, methodsEnergyFiltered)));
-    }
-
-    private String validateEnergySensor() {
-        String osName = System.getProperty("os.name").toLowerCase();
-        String osArch = System.getProperty("os.arch").toLowerCase();
-
-        if (osName.contains("linux")) {
-            // GNU/Linux
-            if (osArch.contains("aarch64") || osArch.contains("arm")) {
-                // Platform not supported
-                System.out.println("Platform not supported. Existing...");
-                System.exit(1);
-            } else {
-                // Suppose it's x86/64, check for powercap RAPL
-                if (Files.exists(RAPL_PATH)) {
-                    return "rapl";
-                } else {
-                    System.out.println("Platform not supported. Existing...");
-                    System.exit(1);
-                }
-            }
-        }
-
-        if (osName.contains("win")) {
-            return "windows";
-        }
-
-        System.out.println("Platform not supported. Existing...");
-        System.exit(1);
-        return null;
     }
 
     private ThreadMXBean enableCpuTime() {
@@ -159,31 +117,6 @@ public class Agent {
         }
 
         return mxbean;
-    }
-
-    private OperatingSystemMXBean getOSMXBean() {
-        // Get OS MxBean to collect CPU and Process loads
-        OperatingSystemMXBean osMxBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-
-        // Loop for a couple of seconds to initialize OSMXBean to get accurate details (first call will return -1)
-        for (int i = 0; i < 2; i++) {
-            osMxBean.getCpuLoad();
-            osMxBean.getProcessCpuLoad();
-            if (energySensor.equals("windows")) {
-                // On windows, start power monitoring a few seconds to initialize
-                try {
-                    this.powerMonitorWindowsProcess = Runtime.getRuntime().exec(powerMonitorPathWindows);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    System.out.println("Can't start power monitor on Windows. Existing...");
-                    System.exit(1);
-                }
-            }
-            try {
-                Thread.sleep(500);
-            } catch (Exception ignoredException) {}
-        }
-        return osMxBean;
     }
 
     /**
