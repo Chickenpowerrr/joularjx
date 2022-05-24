@@ -7,6 +7,9 @@ import org.noureddine.joularjx.util.AtomicDouble;
 
 public class PowerConsumptionHandler implements Runnable {
 
+  private static final String THREAD_NAME = "JoularJX Agent Computation";
+  private static final String DESTROY_THREAD_NAME = "DestroyJavaVM";
+
   private final long appPid;
   private final EnergySensor energySensor;
   private final AtomicDouble totalProcessEnergy;
@@ -20,15 +23,15 @@ public class PowerConsumptionHandler implements Runnable {
 
   @Override
   public void run() {
-    Thread.currentThread().setName("JoularJX Agent Computation");
+    Thread.currentThread().setName(THREAD_NAME);
     System.out.println("Started monitoring application with ID " + appPid);
 
     Set<Thread> threads = Thread.getAllStackTraces().keySet();
-    while (threads.stream().anyMatch(Thread::isAlive)) {
+    while (threads.stream().noneMatch(thread -> thread.getName().equals(DESTROY_THREAD_NAME))) {
       try {
         energySensor.startMeasurement();
 
-        Thread.sleep(100);
+        Thread.sleep(10);
 
         EnergyMeasurement measurement = energySensor.endMeasurement();
 

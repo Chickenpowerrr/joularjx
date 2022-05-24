@@ -24,7 +24,7 @@ public class AtomicDouble extends Number {
 
   public final double add(double add) {
     double startValue = value;
-    while (!VALUE.compareAndSet(startValue, startValue + add)) {
+    while (!VALUE.compareAndSet(this, startValue, startValue + add)) {
       startValue = value;
     }
 

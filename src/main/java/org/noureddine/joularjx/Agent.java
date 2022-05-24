@@ -26,6 +26,8 @@ import org.noureddine.joularjx.util.Sneaky;
 
 public class Agent {
 
+    private static final String THREAD_NAME = "JoularJX Agent Thread";
+
     private static final Path CONFIG_PATH = Path.of("./config.properties");
 
     /**
@@ -39,7 +41,6 @@ public class Agent {
      * will be called. Then the real application main method will be called.
      */
     public static void premain(String args, Instrumentation inst) {
-        Thread.currentThread().setName("JoularJX Agent Thread");
         System.out.println("+---------------------------------+");
         System.out.println("| JoularJX Agent Version 1.0      |");
         System.out.println("+---------------------------------+");
@@ -55,13 +56,14 @@ public class Agent {
     private Properties getProperties() {
         // Read properties file
         Properties properties = new Properties();
-        Sneaky.perform(() -> properties.load(Files.newBufferedReader(CONFIG_PATH)));
+        Sneaky.perform(() -> properties.load(Files.newInputStream(CONFIG_PATH)));
         return properties;
     }
 
     public void run() {
         System.out.println("Please wait while initializing JoularJX...");
 
+        Thread.currentThread().setName(THREAD_NAME);
         AtomicDouble totalProcessEnergy = new AtomicDouble();
         long appPid = ProcessHandle.current().pid();
         enableCpuTime();
