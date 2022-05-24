@@ -5,7 +5,7 @@ import java.util.concurrent.Callable;
 public final class Sneaky {
 
   @SuppressWarnings("unchecked")
-  public static <T extends Throwable> void throwing(Throwable t) throws T {
+  public static <T extends Throwable, R> R throwing(Throwable t) throws T {
     throw (T) t;
   }
 

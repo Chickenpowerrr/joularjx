@@ -16,28 +16,31 @@ public class RaplEnergySensor implements EnergySensor {
   private static final Path DRAM_PATH = Path.of("/sys/class/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:2/energy_uj");
   private static final double MICROJOULES_IN_JOULE = 1e6;
 
-  private final ThreadLocal<Double> start;
+  private final ThreadLocal<Double> startEnergy;
+  private final ThreadLocal<Long> startTimeNanos;
   private final OperatingSystemMXBean osMxBean;
 
   public RaplEnergySensor() {
-    this.start = ThreadLocal.withInitial(() -> 0.0);
+    this.startEnergy = ThreadLocal.withInitial(() -> 0D);
+    this.startTimeNanos = ThreadLocal.withInitial(() -> 0L);
     this.osMxBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
     warmupOsMxBean();
   }
 
   @Override
-  public OperatingSystemMXBean getOsMxBean() {
-    return osMxBean;
-  }
-
-  @Override
   public void startMeasurement() {
-    start.set(getEnergy());
+    startEnergy.set(getEnergy());
+    startTimeNanos.set(System.nanoTime());
   }
 
   @Override
-  public double endMeasurement() {
-    return getEnergy() - start.get();
+  public EnergyMeasurement endMeasurement() {
+    double energy = getEnergy() - startEnergy.get();
+    long durationNanos = System.nanoTime() - startTimeNanos.get();
+    double cpuLoad = osMxBean.getCpuLoad();
+    double processCpuLoad = osMxBean.getProcessCpuLoad();
+
+    return new EnergyMeasurement(durationNanos, energy, cpuLoad, processCpuLoad);
   }
 
   private void warmupOsMxBean() {

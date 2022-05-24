@@ -18,11 +18,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import org.noureddine.joularjx.energysensor.EnergySensor;
 import org.noureddine.joularjx.energysensor.EnergySensorFactory;
 
@@ -31,29 +27,9 @@ public class Agent {
     private static final Path CONFIG_PATH = Path.of("./config.properties");
 
     /**
-     * Map to store total energy for each method
-     */
-    private final Map<String, Double> methodsEnergy;
-
-    /**
-     * Map to store total energy for filtered methods
-     */
-    private final Map<String, Double> methodsEnergyFiltered;
-
-    /**
      * Sensor to use for monitor CPU energy/power consumption
      */
     private final EnergySensor energySensor;
-
-    /**
-     * List of methods to filter for energy
-     */
-    private final List<String> filterMethodNames;
-
-    /**
-     * Variables to collect the program energy consumption
-     */
-    private final AtomicDouble totalProcessEnergy;
 
     /**
      * JVM hook to statically load the java agent at startup.
@@ -70,16 +46,8 @@ public class Agent {
     }
 
     public Agent() {
-        this.methodsEnergy = new ConcurrentHashMap<>();
-        this.methodsEnergyFiltered = new ConcurrentHashMap<>();
-        this.totalProcessEnergy = new AtomicDouble();
-
-        Properties properties = getProperties();
-
         this.energySensor = EnergySensorFactory.getInstance().getEnergySensor(
-            properties.getProperty("powermonitor-path"));
-        this.filterMethodNames = Arrays.asList(
-            properties.getProperty("filter-method-names").split(","));
+            getProperties().getProperty("powermonitor-path"));
     }
 
     private Properties getProperties() {
@@ -92,20 +60,18 @@ public class Agent {
     public void run() {
         System.out.println("Please wait while initializing JoularJX...");
 
-        ThreadMXBean mxbean = enableCpuTime();
+        AtomicDouble totalProcessEnergy = new AtomicDouble();
         long appPid = ProcessHandle.current().pid();
+        enableCpuTime();
 
         System.out.println("Initialization finished");
 
-        new Thread(
-            new PowerConsumptionHandler(appPid, energySensor, mxbean, totalProcessEnergy,
-                filterMethodNames, methodsEnergy, methodsEnergyFiltered)).start();
+        new Thread(new PowerConsumptionHandler(appPid, energySensor, totalProcessEnergy)).start();
         Runtime.getRuntime().addShutdownHook(new Thread(
-            new ShutdownHandler(appPid, totalProcessEnergy, energySensor,
-                methodsEnergy, methodsEnergyFiltered)));
+            new ShutdownHandler(appPid, totalProcessEnergy, energySensor)));
     }
 
-    private ThreadMXBean enableCpuTime() {
+    private void enableCpuTime() {
         ThreadMXBean mxbean = ManagementFactory.getThreadMXBean();
         if (!mxbean.isThreadCpuTimeSupported()) {
             System.out.println("Thread CPU Time is not supported on this Java Virtual Machine. Existing...");
@@ -115,8 +81,6 @@ public class Agent {
         if (!mxbean.isThreadCpuTimeEnabled()) {
             mxbean.setThreadCpuTimeEnabled(true);
         }
-
-        return mxbean;
     }
 
     /**

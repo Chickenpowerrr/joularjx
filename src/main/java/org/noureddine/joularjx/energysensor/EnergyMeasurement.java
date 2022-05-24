@@ -2,18 +2,23 @@ package org.noureddine.joularjx.energysensor;
 
 public class EnergyMeasurement {
 
+  private static final double NANOS_IN_SECOND = 1e9;
+
+  private final long durationNanos;
   private final double cpuEnergy;
   private final double cpuLoad;
   private final double processCpuLoad;
 
-  public EnergyMeasurement(double cpuEnergy, double cpuLoad, double processCpuLoad) {
+  public EnergyMeasurement(long durationNanos, double cpuEnergy,
+      double cpuLoad, double processCpuLoad) {
+    this.durationNanos = durationNanos;
     this.cpuEnergy = cpuEnergy;
     this.cpuLoad = cpuLoad;
     this.processCpuLoad = processCpuLoad;
   }
 
   public double getProcessCpuEnergy() {
-    return (processCpuLoad * cpuEnergy) / cpuLoad;
+    return (durationNanos / NANOS_IN_SECOND) * (processCpuLoad * cpuEnergy) / cpuLoad;
   }
 
   public double getCpuEnergy() {
@@ -26,5 +31,9 @@ public class EnergyMeasurement {
 
   public double getProcessCpuLoad() {
     return processCpuLoad;
+  }
+
+  public long getDurationNanos() {
+    return durationNanos;
   }
 }

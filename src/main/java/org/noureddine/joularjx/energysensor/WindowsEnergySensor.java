@@ -5,38 +5,33 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
+import org.noureddine.joularjx.Sneaky;
 
 public class WindowsEnergySensor implements EnergySensor {
 
   private final OperatingSystemMXBean osMxBean;
   private final Process powerMonitorProcess;
+  private final ThreadLocal<Long> startTimeNanos;
 
   public WindowsEnergySensor(String powerMonitorPath) {
     this.osMxBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
     this.powerMonitorProcess = loadPowerMonitorProcess(powerMonitorPath);
+    this.startTimeNanos = ThreadLocal.withInitial(() -> 0L);
   }
 
   @Override
   public void startMeasurement() {
-
+    startTimeNanos.set(System.nanoTime());
   }
 
   @Override
-  public double endMeasurement() {
-    try {
-      BufferedReader input = new BufferedReader(
-          new InputStreamReader(powerMonitorProcess.getInputStream()));
-      String line = input.readLine();
-      return Double.parseDouble(line);
-    } catch (Exception ignoredException) {
-      ignoredException.printStackTrace();
-      return 0.0;
-    }
-  }
+  public EnergyMeasurement endMeasurement() {
+    double energy = getEnergy();
+    long durationNanos = System.nanoTime() - startTimeNanos.get();
+    double cpuLoad = osMxBean.getCpuLoad();
+    double processCpuLoad = osMxBean.getProcessCpuLoad();
 
-  @Override
-  public OperatingSystemMXBean getOsMxBean() {
-    return osMxBean;
+    return new EnergyMeasurement(durationNanos, energy, cpuLoad, processCpuLoad);
   }
 
   @Override
@@ -64,5 +59,16 @@ public class WindowsEnergySensor implements EnergySensor {
     }
 
     return powerMonitorProcess;
+  }
+
+  private double getEnergy() {
+    try {
+      BufferedReader input = new BufferedReader(
+          new InputStreamReader(powerMonitorProcess.getInputStream()));
+      String line = input.readLine();
+      return Double.parseDouble(line);
+    } catch (Exception e) {
+      return Sneaky.throwing(e);
+    }
   }
 }

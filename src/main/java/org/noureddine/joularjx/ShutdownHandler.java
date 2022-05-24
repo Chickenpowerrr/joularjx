@@ -1,9 +1,6 @@
 package org.noureddine.joularjx;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Map;
 import org.noureddine.joularjx.energysensor.EnergySensor;
 
 public class ShutdownHandler implements Runnable {
@@ -11,17 +8,11 @@ public class ShutdownHandler implements Runnable {
   private final long appPid;
   private final EnergySensor energySensor;
   private final AtomicDouble totalProcessEnergy;
-  private final Map<String, Double> methodsEnergy;
-  private final Map<String, Double> methodsEnergyFiltered;
 
-  public ShutdownHandler(long appPid, AtomicDouble totalProcessEnergy,
-      EnergySensor energySensor, Map<String, Double> methodsEnergy,
-      Map<String, Double> methodsEnergyFiltered) {
+  public ShutdownHandler(long appPid, AtomicDouble totalProcessEnergy, EnergySensor energySensor) {
     this.appPid = appPid;
     this.totalProcessEnergy = totalProcessEnergy;
     this.energySensor = energySensor;
-    this.methodsEnergy = methodsEnergy;
-    this.methodsEnergyFiltered = methodsEnergyFiltered;
   }
 
   @Override
@@ -33,40 +24,5 @@ public class ShutdownHandler implements Runnable {
     System.out.println("+---------------------------------+");
     System.out.println("JoularJX finished monitoring application with ID " + appPid);
     System.out.println("Program consumed " + String.format("%.2f", totalProcessEnergy.doubleValue()) + " joules");
-
-    // Prepare buffer for methods energy
-    StringBuffer buf = new StringBuffer();
-    for (Map.Entry<String, Double> entry : methodsEnergy.entrySet()) {
-      String key = entry.getKey();
-      Double value = entry.getValue();
-      buf.append(key + "," + value + "\n");
-    }
-
-    // Write to CSV file
-    String fileNameMethods = "joularJX-" + appPid + "-methods-energy.csv";
-    try {
-      BufferedWriter out = new BufferedWriter(new FileWriter(fileNameMethods, true));
-      out.write(buf.toString());
-      out.close();
-    } catch (Exception ignored) {}
-
-    // Prepare buffer for filtered methods energy
-    StringBuffer bufFil = new StringBuffer();
-    for (Map.Entry<String, Double> entry : methodsEnergyFiltered.entrySet()) {
-      String key = entry.getKey();
-      Double value = entry.getValue();
-      bufFil.append(key + "," + value + "\n");
-    }
-
-    // Write to CSV file for filtered methods
-    String fileNameMethodsFiltered = "joularJX-" + appPid + "-methods-energy-filtered.csv";
-    try {
-      BufferedWriter out = new BufferedWriter(new FileWriter(fileNameMethodsFiltered, true));
-      out.write(bufFil.toString());
-      out.close();
-    } catch (Exception ignored) {}
-
-    System.out.println("Energy consumption of methods and filtered methods written to " + fileNameMethods + " and " + fileNameMethodsFiltered + " files");
-    System.out.println("+---------------------------------+");
   }
 }
