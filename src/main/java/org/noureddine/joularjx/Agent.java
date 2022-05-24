@@ -11,8 +11,6 @@
 
 package org.noureddine.joularjx;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
@@ -21,6 +19,8 @@ import java.nio.file.Path;
 import java.util.Properties;
 import org.noureddine.joularjx.energysensor.EnergySensor;
 import org.noureddine.joularjx.energysensor.EnergySensorFactory;
+import org.noureddine.joularjx.result.CsvResultWriter;
+import org.noureddine.joularjx.result.ResultWriter;
 
 public class Agent {
 
@@ -63,12 +63,16 @@ public class Agent {
         AtomicDouble totalProcessEnergy = new AtomicDouble();
         long appPid = ProcessHandle.current().pid();
         enableCpuTime();
+        ResultWriter resultWriter = Sneaky.perform(() -> new CsvResultWriter(appPid));
+        PowerConsumptionHandler powerConsumptionHandler = new PowerConsumptionHandler(
+            appPid, energySensor, totalProcessEnergy);
+        ShutdownHandler shutdownHandler = new ShutdownHandler(
+            appPid, totalProcessEnergy, energySensor, resultWriter);
 
         System.out.println("Initialization finished");
 
-        new Thread(new PowerConsumptionHandler(appPid, energySensor, totalProcessEnergy)).start();
-        Runtime.getRuntime().addShutdownHook(new Thread(
-            new ShutdownHandler(appPid, totalProcessEnergy, energySensor)));
+        new Thread(powerConsumptionHandler).start();
+        Runtime.getRuntime().addShutdownHook(new Thread(shutdownHandler));
     }
 
     private void enableCpuTime() {
@@ -80,34 +84,6 @@ public class Agent {
 
         if (!mxbean.isThreadCpuTimeEnabled()) {
             mxbean.setThreadCpuTimeEnabled(true);
-        }
-    }
-
-    /**
-     * Read power data from PowerJoular CSV file
-     * @param fileName Path and name of PowerJoular power CSV file
-     * @return Power consumption as reported by PowerJoular for the CPU
-     */
-    public double getPowerFromCSVFile(String fileName) {
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(fileName));
-            // Only read first line
-            String line = br.readLine();
-            if ((line != null) && (line.length() > 0)) {
-                String[] values = line.split(",");
-                br.close();
-                // Line should have 3 values: date, CPU utilization and power
-                // Example: 2021-04-28 15:40:45;0.08023;17.38672
-                return Double.parseDouble(values[2]);
-            }
-            br.close();
-            return 0;
-        } catch (Exception e) {
-            // First few times, CSV file isn't created yet
-            // Also first time PowerJoular runs will generate a file with text Date, CPU Utilization, CPU Power
-            // So, accurate values will be available after around 2-3 seconds
-            // We return 0 in this case and in case any error reading the file or PowerJoular not installed
-            return 0;
         }
     }
 }

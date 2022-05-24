@@ -2,23 +2,28 @@ package org.noureddine.joularjx;
 
 import java.io.IOException;
 import org.noureddine.joularjx.energysensor.EnergySensor;
+import org.noureddine.joularjx.result.ResultWriter;
 
 public class ShutdownHandler implements Runnable {
 
   private final long appPid;
   private final EnergySensor energySensor;
   private final AtomicDouble totalProcessEnergy;
+  private final ResultWriter resultWriter;
 
-  public ShutdownHandler(long appPid, AtomicDouble totalProcessEnergy, EnergySensor energySensor) {
+  public ShutdownHandler(long appPid, AtomicDouble totalProcessEnergy, EnergySensor energySensor,
+      ResultWriter resultWriter) {
     this.appPid = appPid;
     this.totalProcessEnergy = totalProcessEnergy;
     this.energySensor = energySensor;
+    this.resultWriter = resultWriter;
   }
 
   @Override
   public void run() {
     try {
       energySensor.close();
+      resultWriter.write(totalProcessEnergy.doubleValue());
     } catch (IOException ignoredException) {}
 
     System.out.println("+---------------------------------+");
