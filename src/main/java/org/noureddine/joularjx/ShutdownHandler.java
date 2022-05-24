@@ -3,6 +3,7 @@ package org.noureddine.joularjx;
 import java.io.IOException;
 import org.noureddine.joularjx.energysensor.EnergySensor;
 import org.noureddine.joularjx.result.ResultWriter;
+import util.AtomicDouble;
 
 public class ShutdownHandler implements Runnable {
 

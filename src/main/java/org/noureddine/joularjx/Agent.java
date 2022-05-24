@@ -21,6 +21,8 @@ import org.noureddine.joularjx.energysensor.EnergySensor;
 import org.noureddine.joularjx.energysensor.EnergySensorFactory;
 import org.noureddine.joularjx.result.CsvResultWriter;
 import org.noureddine.joularjx.result.ResultWriter;
+import util.AtomicDouble;
+import util.Sneaky;
 
 public class Agent {
 

@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.noureddine.joularjx.Sneaky;
+import util.Sneaky;
 
 public class RaplEnergySensor implements EnergySensor {
 

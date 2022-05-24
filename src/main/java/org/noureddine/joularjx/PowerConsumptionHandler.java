@@ -3,6 +3,7 @@ package org.noureddine.joularjx;
 import java.util.Set;
 import org.noureddine.joularjx.energysensor.EnergyMeasurement;
 import org.noureddine.joularjx.energysensor.EnergySensor;
+import util.AtomicDouble;
 
 public class PowerConsumptionHandler implements Runnable {
 
