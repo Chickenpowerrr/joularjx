@@ -95,7 +95,7 @@ public class Agent {
     private Properties getProperties() {
         // Read properties file
         Properties properties = new Properties();
-        Util.doSneaky(() -> properties.load(Files.newBufferedReader(CONFIG_PATH)));
+        Sneaky.perform(() -> properties.load(Files.newBufferedReader(CONFIG_PATH)));
         return properties;
     }
 

@@ -271,7 +271,7 @@ public class PowerConsumptionHandler implements Runnable {
         return energyData;
       }
     } catch (IOException e) {
-      Util.sneakyThrows(e);
+      Sneaky.throwing(e);
     } catch (Exception e) {
       System.out.println("Failed to get RAPL energy readings. Did you run JoularJX with elevated privileges (sudo)?");
       System.exit(1);

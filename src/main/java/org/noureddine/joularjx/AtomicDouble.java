@@ -10,7 +10,7 @@ public class AtomicDouble extends Number {
   private volatile double value;
 
   static {
-    VALUE = Util.doSneaky(() -> MethodHandles.lookup()
+    VALUE = Sneaky.perform(() -> MethodHandles.lookup()
         .findVarHandle(AtomicDouble.class, "value", double.class));
   }
 
